@@ -1,13 +1,13 @@
 package main
 
 import (
+	"database/sql"
+	"flag"
 	"fmt"
 	"github.com/anupcshan/ofx"
-	"os"
-	"flag"
-	"io"
-	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	"io"
+	"os"
 )
 
 func check(e error) {
@@ -19,14 +19,18 @@ func check(e error) {
 func main() {
 
 	filePath := flag.String("file", "datas.ofx", "Path for the OFX file")
+	dbUser := flag.String("user", "homestead", "Database User")
+	dbPwd := flag.String("pwd", "secret", "Database Password")
+	dbIP := flag.String("ip", "127.0.0.1", "Database IP Address")
+	dbPort := flag.String("port", "33060", "Database Port Number")
+	dbDatabase := flag.String("db", "admin", "Database name")
 
 	flag.Parse()
 
 	// Connect to the DB
-	db, err := sql.Open("mysql", 
-		"homestead:secret@tcp(127.0.0.1:33060)/admin")
+	db, err := sql.Open("mysql", fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", *dbUser, *dbPwd, *dbIP, *dbPort, *dbDatabase))
 	check(err)
-	
+
 	err = db.Ping()
 	check(err)
 
@@ -34,12 +38,12 @@ func main() {
 
 	// Open the OFX file, then parse it
 	var data io.Reader
-	data, _ = os.Open(*filePath)	
+	data, _ = os.Open(*filePath)
 	parsed, _ := ofx.Parse(data)
 
 	// Loop over the transactions, adding them to the SQL DB
 	for _, elem := range parsed.Transactions {
-		
+
 		value, _ := elem.Amount.Value.Float64()
 
 		rows, err := db.Query("SELECT COUNT(*) as count FROM bank_transactions WHERE transactional_id = ? AND amount = ?", elem.ID, value)
@@ -58,7 +62,7 @@ func main() {
 			check(err)
 
 			fmt.Printf("ID = %d\n", lastId)
-		} 
+		}
 	}
 }
 

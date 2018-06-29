@@ -4,10 +4,11 @@ import (
 	"database/sql"
 	"flag"
 	"fmt"
-	"github.com/anupcshan/ofx"
 	_ "github.com/go-sql-driver/mysql"
+	"github.com/samuelthomps0n/ofx"
 	"io"
 	"os"
+	"strings"
 )
 
 func check(e error) {
@@ -41,6 +42,30 @@ func main() {
 	data, _ = os.Open(*filePath)
 	parsed, _ := ofx.Parse(data)
 
+	var sortCode = strings.Join([]string{parsed.AccountNumber[0:2], parsed.AccountNumber[2:4], parsed.AccountNumber[4:6]}, "-")
+	var accountNumber = parsed.AccountNumber[6:]
+
+	stmt, err := db.Prepare("INSERT INTO bank_accounts(sort_code, account_number, balance, balance_updated) VALUES(?, ?, ?, ?) ON DUPLICATE KEY UPDATE balance=?, balance_updated=?")
+	check(err)
+	res, err := stmt.Exec(sortCode, accountNumber, parsed.Balance, parsed.BalanceUpdated, parsed.Balance, parsed.BalanceUpdated)
+	check(err)
+	lastId, err := res.LastInsertId()
+	check(err)
+
+	fmt.Printf("ID = %d\n", lastId)
+
+	var search = strings.Join([]string{"SELECT id FROM bank_accounts WHERE account_number=", accountNumber}, "")
+	var id int
+	row := db.QueryRow(search)
+	switch err := row.Scan(&id); err {
+	case sql.ErrNoRows:
+		check(err)
+	case nil:
+		fmt.Println(id)
+	default:
+		panic(err)
+	}
+
 	// Loop over the transactions, adding them to the SQL DB
 	for _, elem := range parsed.Transactions {
 
@@ -52,10 +77,12 @@ func main() {
 
 		if checkCount(rows) != 1 {
 
-			stmt, err := db.Prepare("INSERT INTO bank_transactions(transactional_id, amount, description) VALUES(?, ?, ?)")
+			var transactionDate = strings.Join([]string{elem.ID[1:5], elem.ID[5:7], elem.ID[7:9]}, "-")
+
+			stmt, err := db.Prepare("INSERT INTO bank_transactions(transactional_id, amount, description, bank_account, date) VALUES(?, ?, ?, ?, ?)")
 			check(err)
 
-			res, err := stmt.Exec(elem.ID, value, elem.Description)
+			res, err := stmt.Exec(elem.ID, value, elem.Description, id, transactionDate)
 			check(err)
 
 			lastId, err := res.LastInsertId()

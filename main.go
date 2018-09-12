@@ -19,7 +19,7 @@ func check(e error) {
 
 func main() {
 
-	filePath := flag.String("file", "datas.ofx", "Path for the OFX file")
+	filePath := flag.String("file", "data.ofx", "Path for the OFX file")
 	dbUser := flag.String("user", "homestead", "Database User")
 	dbPwd := flag.String("pwd", "secret", "Database Password")
 	dbIP := flag.String("ip", "127.0.0.1", "Database IP Address")
@@ -77,12 +77,10 @@ func main() {
 
 		if checkCount(rows) != 1 {
 
-			var transactionDate = strings.Join([]string{elem.ID[1:5], elem.ID[5:7], elem.ID[7:9]}, "-")
-
 			stmt, err := db.Prepare("INSERT INTO bank_transactions(transactional_id, amount, description, bank_account, date) VALUES(?, ?, ?, ?, ?)")
 			check(err)
 
-			res, err := stmt.Exec(elem.ID, value, elem.Description, id, transactionDate)
+			res, err := stmt.Exec(elem.ID, value, elem.Description, id, elem.PostedDate)
 			check(err)
 
 			lastId, err := res.LastInsertId()
